@@ -1,153 +1,81 @@
-import React, {
-    useEffect,
-    useState
-} from "react";
-
-import axios from "axios";
+import React, { useEffect, useState } from "react";
+import { bookingsApi } from "../services/api";
+import { getStoredUser } from "../utils/auth";
 
 function MyBookings() {
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-    const [bookings, setBookings] =
-    useState([]);
+  useEffect(() => {
+    const fetchBookings = async () => {
+      setLoading(true);
+      setError("");
 
-    useEffect(() => {
-
-        fetchBookings();
-
-    }, []);
-
-    const fetchBookings = async() => {
-
-        try {
-
-            const user =
-                JSON.parse(
-                    localStorage.getItem("user")
-                );
-
-            if (!user) return;
-
-            const res =
-                await axios.get(
-
-                    `http://localhost:5000/api/bookings/user/${user.id}`
-
-                );
-
-            setBookings(res.data);
-
-        } catch (error) {
-
-            console.log(error);
+      try {
+        const user = getStoredUser();
+        if (!user?.id) {
+          setBookings([]);
+          setLoading(false);
+          return;
         }
+        const res = await bookingsApi.listByUser(user.id);
+        setBookings(Array.isArray(res.data) ? res.data : []);
+      } catch {
+        setError("Failed to fetch bookings.");
+      } finally {
+        setLoading(false);
+      }
     };
 
-    return (
+    fetchBookings();
+  }, []);
 
-        <
-        div style = { styles.container } >
+  const cancelBooking = async (bookingId) => {
+    const confirmed = window.confirm("Cancel this booking?");
+    if (!confirmed) return;
 
-        <
-        h1 style = { styles.heading } >
-        My Bookings <
-        /h1>
+    try {
+      await bookingsApi.remove(bookingId);
+      setBookings((prev) => prev.filter((booking) => booking._id !== bookingId));
+    } catch {
+      setError("Cancel booking is not available right now.");
+    }
+  };
 
-        <
-        div style = { styles.grid } >
+  return (
+    <div style={styles.container}>
+      <h1 style={styles.heading}>My Bookings</h1>
 
-        {
-            bookings.length > 0 ? (
+      {loading && <p style={styles.message}>Loading bookings...</p>}
+      {!loading && error && <p style={{ ...styles.message, color: "#fecaca" }}>{error}</p>}
+      {!loading && !error && bookings.length === 0 && <p style={styles.message}>No bookings found.</p>}
 
-                bookings.map((booking) => (
-
-                    <
-                    div key = { booking._id }
-                    style = { styles.card } >
-
-                    <
-                    h2 > { booking.spaceTitle } <
-                    /h2>
-
-                    <
-                    p > 📍{ booking.location } <
-                    /p>
-
-                    <
-                    h3 > ₹{ booking.price } <
-                    /h3>
-
-                    <
-                    p > 📅{ booking.date } <
-                    /p>
-
-                    <
-                    p > ⏰{ booking.startTime } { " - " } { booking.endTime } <
-                    /p>
-
-                    <
-                    /div>
-
-                ))
-
-            ) : (
-
-                <
-                h2 style = {
-                    { color: "white" } } >
-                No Bookings Found <
-                /h2>
-            )
-        }
-
-        <
-        /div>
-
-        <
-        /div>
-    );
+      {!loading && !error && bookings.length > 0 && (
+        <div style={styles.grid}>
+          {bookings.map((booking) => (
+            <div key={booking._id} style={styles.card}>
+              <h2>{booking.spaceTitle}</h2>
+              <p>📍 {booking.location}</p>
+              <h3>₹ {booking.price}</h3>
+              <p>📅 {booking.date}</p>
+              <p>⏰ {booking.startTime} - {booking.endTime}</p>
+              <button style={styles.cancelButton} onClick={() => cancelBooking(booking._id)}>Cancel Booking</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 const styles = {
-
-    container: {
-
-        minHeight: "100vh",
-
-        padding: "40px",
-
-        background: "#0f172a"
-    },
-
-    heading: {
-
-        color: "white",
-
-        marginBottom: "30px",
-
-        fontSize: "40px"
-    },
-
-    grid: {
-
-        display: "grid",
-
-        gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
-
-        gap: "25px"
-    },
-
-    card: {
-
-        background: "rgba(255,255,255,0.08)",
-
-        borderRadius: "20px",
-
-        padding: "20px",
-
-        color: "white",
-
-        backdropFilter: "blur(10px)"
-    }
+  container: { minHeight: "100vh", padding: "30px", background: "#0f172a" },
+  heading: { color: "white", marginBottom: "24px", fontSize: "36px" },
+  message: { color: "white", background: "rgba(255,255,255,0.08)", padding: "12px", borderRadius: "8px" },
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: "25px" },
+  card: { background: "rgba(255,255,255,0.08)", borderRadius: "20px", padding: "20px", color: "white", backdropFilter: "blur(10px)" },
+  cancelButton: { marginTop: "10px", width: "100%", background: "#dc2626", color: "white", border: "none", padding: "10px", borderRadius: "8px", cursor: "pointer", fontWeight: "bold" },
 };
 
 export default MyBookings;
