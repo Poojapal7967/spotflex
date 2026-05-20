@@ -1,9 +1,17 @@
 const express = require("express");
+const rateLimit = require("express-rate-limit");
 
 const router = express.Router();
 
 const Booking =
     require("../models/Booking");
+
+const cancelBookingLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false
+});
 
 
 // ================= CREATE BOOKING =================
@@ -65,7 +73,7 @@ router.get("/user/:userId", async(req, res) => {
 
 // ================= CANCEL BOOKING =================
 
-router.delete("/:bookingId", async(req, res) => {
+router.delete("/:bookingId", cancelBookingLimiter, async(req, res) => {
 
     try {
 
