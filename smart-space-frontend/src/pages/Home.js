@@ -1,13 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
-const toMinutes = (time) => {
-  if (!time || !time.includes(":")) return NaN;
-  const [hours, minutes] = time.split(":").map(Number);
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) return NaN;
-  return hours * 60 + minutes;
-};
-
 function Home() {
   const [spaces, setSpaces] = useState([]);
   const [selectedSpace, setSelectedSpace] = useState(null);
@@ -61,21 +54,6 @@ function Home() {
 
       if (!user) return alert("Please login first");
       if (!date || !startTime || !endTime) return alert("Fill all details");
-      const startMinutes = toMinutes(startTime);
-      const endMinutes = toMinutes(endTime);
-      if (Number.isNaN(startMinutes) || Number.isNaN(endMinutes)) {
-        return alert("Invalid time format");
-      }
-      if (endMinutes <= startMinutes) {
-        return alert("End time must be after start time");
-      }
-      const selectedStartDateTime = new Date(`${date}T${startTime}`);
-      if (Number.isNaN(selectedStartDateTime.getTime())) {
-        return alert("Invalid date/time selected");
-      }
-      if (selectedStartDateTime < new Date()) {
-        return alert("Past slot booking is not allowed");
-      }
 
       await axios.post("http://localhost:5000/api/bookings/create", {
         userId: user.id,
@@ -93,8 +71,7 @@ function Home() {
       closeBooking();
     } catch (error) {
       console.log(error);
-      const message = error?.response?.data?.message || "Booking failed";
-      alert(message);
+      alert("Booking failed");
     }
   };
 
@@ -157,13 +134,7 @@ function Home() {
             <p style={styles.modalText}>📍 {selectedSpace.location}</p>
             <h3 style={styles.modalPrice}>₹ {selectedSpace.price}</h3>
 
-            <input
-              type="date"
-              min={new Date().toISOString().split("T")[0]}
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              style={styles.modalInput}
-            />
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={styles.modalInput} />
             <input
               type="time"
               value={startTime}
