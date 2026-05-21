@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { categories } from "../data/marketplaceData";
@@ -24,10 +24,7 @@ function AddSpace() {
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [dragging, setDragging] = useState(false);
 
-  const previews = useMemo(
-    () => uploadedFiles.map((file) => ({ name: file.name, url: URL.createObjectURL(file) })),
-    [uploadedFiles]
-  );
+  const previews = uploadedFiles.map((file) => ({ name: file.name }));
 
   const onInput = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -92,7 +89,11 @@ function AddSpace() {
           <p>Drag & drop image upload</p>
           <input type="file" accept="image/*" multiple onChange={(e) => onFiles(e.target.files || [])} />
           <div style={styles.previewGrid}>
-            {previews.map((item) => <img key={item.name} src={item.url} alt={item.name} style={styles.previewImage} />)}
+            {previews.map((item) => (
+              <div key={item.name} style={styles.previewTag}>
+                {item.name}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -110,7 +111,17 @@ const styles = {
   dropZone: { gridColumn: "1 / -1", border: "1px dashed rgba(148,163,184,0.4)", borderRadius: 10, padding: 12, color: "#cbd5e1" },
   dropZoneActive: { borderColor: "rgba(56,189,248,0.7)", background: "rgba(56,189,248,0.1)" },
   previewGrid: { marginTop: 8, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(90px,1fr))", gap: 8 },
-  previewImage: { width: "100%", height: 80, borderRadius: 8, objectFit: "cover" },
+  previewTag: {
+    width: "100%",
+    minHeight: 48,
+    borderRadius: 8,
+    padding: 8,
+    border: "1px solid rgba(148,163,184,0.35)",
+    color: "#cbd5e1",
+    fontSize: 12,
+    display: "flex",
+    alignItems: "center"
+  },
   primaryButton: { gridColumn: "1 / -1", border: "none", borderRadius: 8, background: "linear-gradient(90deg,#2563eb,#38bdf8)", color: "#fff", padding: "10px 14px", fontWeight: 700 }
 };
 

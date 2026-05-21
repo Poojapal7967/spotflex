@@ -8,7 +8,7 @@ function Home() {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [compareList, setCompareList] = useState([]);
   const [wishlist, setWishlist] = useState(() => JSON.parse(localStorage.getItem("wishlist") || "[]"));
-  const [chatPrompt, setChatPrompt] = useState("100 people ke liye hall chahiye under ₹5000");
+  const chatPrompt = "100 people ke liye hall chahiye under ₹5000";
 
   const filteredSpaces = useMemo(() => {
     return spaces.filter((space) => {
