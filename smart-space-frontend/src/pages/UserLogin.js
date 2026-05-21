@@ -1,84 +1,224 @@
-import React, { useState } from "react";
+import React, {
+    useState
+} from "react";
+
 import axios from "axios";
-import { Link, useNavigate } from "react-router-dom";
+
+import {
+    useNavigate,
+    Link
+} from "react-router-dom";
 
 function UserLogin() {
-  const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [otp, setOtp] = useState("");
-  const [isOtpStep, setIsOtpStep] = useState(false);
-  const [isForgotMode, setIsForgotMode] = useState(false);
 
-  const login = async (e) => {
-    e.preventDefault();
-    if (!isOtpStep) {
-      setIsOtpStep(true);
-      return;
-    }
+    const navigate =
+        useNavigate();
 
-    try {
-      const res = await axios.post("http://localhost:5000/api/auth/login", { email, password });
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", JSON.stringify(res.data.user));
-      alert("Login successful");
-      navigate("/home");
-    } catch (error) {
-      const fallbackUser = { name: email.split("@")[0] || "Guest", email, role: "user" };
-      localStorage.setItem("token", "demo-token");
-      localStorage.setItem("user", JSON.stringify(fallbackUser));
-      alert("Demo login successful");
-      navigate("/home");
-    }
-  };
+    const [email, setEmail] =
+    useState("");
 
-  const forgotPassword = () => {
-    if (!email.trim()) return alert("Enter your email first");
-    alert("Password reset OTP sent to your email.");
-    setIsForgotMode(false);
-  };
+    const [password, setPassword] =
+    useState("");
 
-  const loginWithGoogle = () => {
-    const demoUser = { name: "Google User", email: "google.user@spotflex.app", role: "user" };
-    localStorage.setItem("token", "google-demo-token");
-    localStorage.setItem("user", JSON.stringify(demoUser));
-    navigate("/home");
-  };
+    const handleLogin = async(e) => {
 
-  return (
-    <div style={styles.page}>
-      <form style={styles.card} onSubmit={login}>
-        <h1>User Login</h1>
-        <p style={styles.muted}>Email + password, OTP verification, Google login and forgot password support.</p>
-        <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} style={styles.input} required />
-        <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} style={styles.input} required />
+        e.preventDefault();
 
-        {isOtpStep && (
-          <input type="text" placeholder="Enter OTP verification code" value={otp} onChange={(e) => setOtp(e.target.value)} style={styles.input} required />
-        )}
+        try {
 
-        <button type="submit" style={styles.primaryButton}>{isOtpStep ? "Verify OTP & Login" : "Continue to OTP"}</button>
-        <button type="button" onClick={loginWithGoogle} style={styles.googleButton}>Continue with Google</button>
+            const res =
+                await axios.post(
 
-        <button type="button" style={styles.linkButton} onClick={() => setIsForgotMode(!isForgotMode)}>Forgot password?</button>
-        {isForgotMode && <button type="button" style={styles.secondaryButton} onClick={forgotPassword}>Send reset OTP</button>}
+                    "http://localhost:5000/api/auth/login",
 
-        <p style={styles.muted}>Don’t have an account?</p>
-        <Link to="/user-register" style={styles.secondaryButton}>Sign up</Link>
-      </form>
-    </div>
-  );
+                    {
+                        email,
+                        password
+                    }
+
+                );
+
+            localStorage.setItem(
+                "token",
+                res.data.token
+            );
+
+            localStorage.setItem(
+                "user",
+                JSON.stringify(
+                    res.data.user
+                )
+            );
+
+            alert("Login Successful 🚀");
+
+            navigate("/home");
+
+        } catch (error) {
+
+            alert("Invalid Credentials");
+        }
+    };
+
+    return (
+
+        <
+        div style = { styles.container } >
+
+        <
+        form style = { styles.card }
+        onSubmit = { handleLogin } >
+
+        <
+        h1 style = { styles.title } >
+        User Login <
+        /h1>
+
+        <
+        input type = "email"
+        placeholder = "Enter Email"
+        value = { email }
+        onChange = {
+            (e) =>
+            setEmail(e.target.value)
+        }
+        style = { styles.input }
+        />
+
+        <
+        input type = "password"
+        placeholder = "Enter Password"
+        value = { password }
+        onChange = {
+            (e) =>
+            setPassword(e.target.value)
+        }
+        style = { styles.input }
+        />
+
+        <
+        button style = { styles.button } >
+        Login <
+        /button>
+
+        <
+        p style = { styles.text } >
+        Don 't have account? <
+        /p>
+
+        <
+        Link to = "/user-register" >
+        <
+        button type = "button"
+        style = { styles.registerButton } >
+        Register <
+        /button> <
+        /Link>
+
+        <
+        /form>
+
+        <
+        /div>
+    );
 }
 
 const styles = {
-  page: { minHeight: "calc(100vh - 90px)", display: "grid", placeItems: "center", padding: 24 },
-  card: { width: "min(420px,100%)", border: "1px solid rgba(148,163,184,0.25)", borderRadius: 16, padding: 20, background: "rgba(15,23,42,0.75)", display: "grid", gap: 10 },
-  muted: { color: "#94a3b8", fontSize: 14 },
-  input: { padding: 11, borderRadius: 8, border: "1px solid rgba(148,163,184,0.35)", background: "#0b122e", color: "#e2e8f0" },
-  primaryButton: { border: "none", borderRadius: 8, background: "linear-gradient(90deg,#2563eb,#38bdf8)", color: "#fff", padding: "10px 12px", fontWeight: 700 },
-  googleButton: { border: "1px solid rgba(148,163,184,0.35)", borderRadius: 8, background: "#fff", color: "#111827", padding: "10px 12px", fontWeight: 700 },
-  secondaryButton: { border: "1px solid rgba(148,163,184,0.35)", borderRadius: 8, background: "transparent", color: "#e2e8f0", padding: "10px 12px", textAlign: "center" },
-  linkButton: { border: "none", background: "transparent", color: "#7dd3fc", textAlign: "left", padding: 0 }
+
+    container: {
+
+        height: "100vh",
+
+        display: "flex",
+
+        justifyContent: "center",
+
+        alignItems: "center",
+
+        background: "linear-gradient(to right,#0f172a,#1e3a8a)"
+    },
+
+    card: {
+
+        width: "350px",
+
+        padding: "40px",
+
+        borderRadius: "20px",
+
+        background: "rgba(255,255,255,0.08)",
+
+        backdropFilter: "blur(10px)",
+
+        display: "flex",
+
+        flexDirection: "column",
+
+        gap: "20px",
+
+        boxShadow: "0 4px 20px rgba(0,0,0,0.3)"
+    },
+
+    title: {
+
+        textAlign: "center",
+
+        color: "white"
+    },
+
+    input: {
+
+        padding: "14px",
+
+        borderRadius: "10px",
+
+        border: "none",
+
+        outline: "none",
+
+        fontSize: "16px"
+    },
+
+    button: {
+
+        background: "linear-gradient(to right,#2563eb,#38bdf8)",
+
+        color: "white",
+
+        border: "none",
+
+        padding: "14px",
+
+        borderRadius: "10px",
+
+        fontWeight: "bold",
+
+        fontSize: "16px"
+    },
+
+    registerButton: {
+
+        width: "100%",
+
+        background: "transparent",
+
+        color: "white",
+
+        border: "1px solid white",
+
+        padding: "14px",
+
+        borderRadius: "10px",
+
+        fontWeight: "bold"
+    },
+
+    text: {
+
+        textAlign: "center",
+
+        color: "white"
+    }
 };
 
 export default UserLogin;

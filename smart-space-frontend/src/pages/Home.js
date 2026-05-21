@@ -1,251 +1,350 @@
-import React, { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { categories, seedReviews, spaces } from "../data/marketplaceData";
+import React, { useEffect, useMemo, useState } from "react";
+import axios from "axios";
+
+const toMinutes = (time) => {
+  if (!time || !time.includes(":")) return NaN;
+  const [hours, minutes] = time.split(":").map(Number);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return NaN;
+  return hours * 60 + minutes;
+};
 
 function Home() {
-  const [search, setSearch] = useState("");
-  const [location, setLocation] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
-  const [compareList, setCompareList] = useState([]);
-  const [wishlist, setWishlist] = useState(() => JSON.parse(localStorage.getItem("wishlist") || "[]"));
-  const chatPrompt = "100 people ke liye hall chahiye under ₹5000";
+  const [spaces, setSpaces] = useState([]);
+  const [selectedSpace, setSelectedSpace] = useState(null);
+
+  const [date, setDate] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+
+  const [query, setQuery] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+
+  useEffect(() => {
+    fetchSpaces();
+  }, []);
+
+  const fetchSpaces = async () => {
+    try {
+      const res = await axios.get("http://localhost:5000/api/spaces");
+      setSpaces(Array.isArray(res.data) ? res.data : []);
+    } catch (error) {
+      console.log(error);
+    }
+  };
 
   const filteredSpaces = useMemo(() => {
     return spaces.filter((space) => {
-      const term = search.trim().toLowerCase();
-      const locationTerm = location.trim().toLowerCase();
-      const matchSearch =
-        !term ||
-        space.title.toLowerCase().includes(term) ||
-        space.description.toLowerCase().includes(term) ||
-        space.address.toLowerCase().includes(term);
-      const matchLocation = !locationTerm || space.location.toLowerCase().includes(locationTerm);
-      const matchCategory = selectedCategory === "All" || space.type === selectedCategory;
-      return matchSearch && matchLocation && matchCategory;
+      const title = (space.title || "").toLowerCase();
+      const location = (space.location || "").toLowerCase();
+      const searchText = query.trim().toLowerCase();
+      const numericPrice = Number(space.price) || 0;
+
+      const matchesSearch = !searchText || title.includes(searchText) || location.includes(searchText);
+      const matchesPrice = !maxPrice || numericPrice <= Number(maxPrice);
+
+      return matchesSearch && matchesPrice;
     });
-  }, [search, location, selectedCategory]);
+  }, [spaces, query, maxPrice]);
 
-  const featured = spaces.filter((space) => space.featured);
-  const trending = [...spaces].sort((a, b) => b.popularScore - a.popularScore).slice(0, 3);
+  const openBooking = (space) => setSelectedSpace(space);
 
-  const toggleWishlist = (spaceId) => {
-    const next = wishlist.includes(spaceId)
-      ? wishlist.filter((id) => id !== spaceId)
-      : [...wishlist, spaceId];
-    setWishlist(next);
-    localStorage.setItem("wishlist", JSON.stringify(next));
+  const closeBooking = () => {
+    setSelectedSpace(null);
+    setDate("");
+    setStartTime("");
+    setEndTime("");
   };
 
-  const toggleCompare = (spaceId) => {
-    if (compareList.includes(spaceId)) {
-      setCompareList(compareList.filter((id) => id !== spaceId));
-      return;
-    }
-    if (compareList.length >= 2) {
-      alert("You can compare up to 2 spaces.");
-      return;
-    }
-    setCompareList([...compareList, spaceId]);
-  };
+  const handleBooking = async () => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user"));
 
-  const compareSpaces = spaces.filter((space) => compareList.includes(space.id));
+      if (!user) return alert("Please login first");
+      if (!date || !startTime || !endTime) return alert("Fill all details");
+      const startMinutes = toMinutes(startTime);
+      const endMinutes = toMinutes(endTime);
+      if (Number.isNaN(startMinutes) || Number.isNaN(endMinutes)) {
+        return alert("Invalid time format");
+      }
+      if (endMinutes <= startMinutes) {
+        return alert("End time must be after start time");
+      }
+      const selectedStartDateTime = new Date(`${date}T${startTime}`);
+      if (Number.isNaN(selectedStartDateTime.getTime())) {
+        return alert("Invalid date/time selected");
+      }
+      if (selectedStartDateTime < new Date()) {
+        return alert("Past slot booking is not allowed");
+      }
+
+      await axios.post("http://localhost:5000/api/bookings/create", {
+        userId: user.id,
+        userName: user.name,
+        spaceId: selectedSpace._id,
+        spaceTitle: selectedSpace.title,
+        location: selectedSpace.location,
+        price: selectedSpace.price,
+        date,
+        startTime,
+        endTime,
+      });
+
+      alert("Booking successful 🚀");
+      closeBooking();
+    } catch (error) {
+      console.log(error);
+      const message = error?.response?.data?.message || "Booking failed";
+      alert(message);
+    }
+  };
 
   return (
-    <div style={styles.page}>
-      <section style={styles.hero}>
-        <h1 style={styles.heroTitle}>Find spaces near you</h1>
-        <p style={styles.heroText}>Office, meeting rooms, studios, event halls and co-working spaces in one app.</p>
+    <div style={styles.container}>
+      <header style={styles.header}>
+        <h1 style={styles.heading}>Find your perfect short-term space</h1>
+        <p style={styles.tagline}>Browse available places and reserve in just a few clicks.</p>
+      </header>
 
-        <div style={styles.searchPanel}>
-          <input
-            style={styles.input}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Find spaces near you"
-          />
-          <input
-            style={styles.input}
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="Location filter"
-          />
-          <Link to="/explore" style={styles.primaryButton}>
-            Explore Results
-          </Link>
+      <section style={styles.filterBar}>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by title or location"
+          style={styles.input}
+        />
+        <input
+          type="number"
+          min="0"
+          value={maxPrice}
+          onChange={(e) => setMaxPrice(e.target.value)}
+          placeholder="Max price"
+          style={styles.input}
+        />
+        <button style={styles.clearBtn} onClick={() => { setQuery(""); setMaxPrice(""); }}>
+          Clear
+        </button>
+      </section>
+
+      <p style={styles.countText}>{filteredSpaces.length} space(s) found</p>
+
+      <div style={styles.grid}>
+        {filteredSpaces.map((space) => (
+          <div key={space._id} style={styles.card}>
+            <img src={space.image || "https://via.placeholder.com/500x280"} alt="space" style={styles.image} />
+            <div style={styles.cardBody}>
+              <h2 style={styles.title}>{space.title || "Space"}</h2>
+              <p style={styles.text}>📍 {space.location || "Location"}</p>
+              <h3 style={styles.price}>₹ {space.price || 0}</h3>
+              <button style={styles.button} onClick={() => openBooking(space)}>
+                Book Now
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {!filteredSpaces.length && (
+        <div style={styles.emptyState}>
+          <h3 style={styles.emptyTitle}>No spaces match your search</h3>
+          <p style={styles.emptyText}>Try a different keyword or increase the max price.</p>
         </div>
+      )}
 
-        <div style={styles.categories}>
-          <button
-            type="button"
-            onClick={() => setSelectedCategory("All")}
-            style={{ ...styles.chip, ...(selectedCategory === "All" ? styles.activeChip : {}) }}
-          >
-            All
-          </button>
-          {categories.map((category) => (
-            <button
-              type="button"
-              key={category}
-              onClick={() => setSelectedCategory(category)}
-              style={{ ...styles.chip, ...(selectedCategory === category ? styles.activeChip : {}) }}
-            >
-              {category}
+      {selectedSpace && (
+        <div style={styles.overlay}>
+          <div style={styles.modal}>
+            <h2 style={styles.modalTitle}>{selectedSpace.title}</h2>
+            <p style={styles.modalText}>📍 {selectedSpace.location}</p>
+            <h3 style={styles.modalPrice}>₹ {selectedSpace.price}</h3>
+
+            <input
+              type="date"
+              min={new Date().toISOString().split("T")[0]}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              style={styles.modalInput}
+            />
+            <input
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              style={styles.modalInput}
+            />
+            <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} style={styles.modalInput} />
+
+            <button style={styles.payBtn} onClick={handleBooking}>
+              Proceed To Payment
             </button>
-          ))}
+            <button style={styles.closeBtn} onClick={closeBooking}>
+              Cancel
+            </button>
+          </div>
         </div>
-      </section>
-
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Featured spaces</h2>
-        <div style={styles.grid}>
-          {featured.map((space) => (
-            <SpaceTile
-              key={space.id}
-              space={space}
-              isWishlisted={wishlist.includes(space.id)}
-              inCompare={compareList.includes(space.id)}
-              onWishlist={toggleWishlist}
-              onCompare={toggleCompare}
-            />
-          ))}
-        </div>
-      </section>
-
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Trending now</h2>
-        <div style={styles.grid}>
-          {trending.map((space) => (
-            <SpaceTile
-              key={space.id}
-              space={space}
-              isWishlisted={wishlist.includes(space.id)}
-              inCompare={compareList.includes(space.id)}
-              onWishlist={toggleWishlist}
-              onCompare={toggleCompare}
-            />
-          ))}
-        </div>
-      </section>
-
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Search results</h2>
-        <div style={styles.grid}>
-          {filteredSpaces.map((space) => (
-            <SpaceTile
-              key={space.id}
-              space={space}
-              isWishlisted={wishlist.includes(space.id)}
-              inCompare={compareList.includes(space.id)}
-              onWishlist={toggleWishlist}
-              onCompare={toggleCompare}
-            />
-          ))}
-        </div>
-      </section>
-
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Compare spaces</h2>
-        <div style={styles.compareWrap}>
-          {compareSpaces.length < 2 ? (
-            <p style={styles.muted}>Select any two spaces to compare pricing, capacity and rating.</p>
-          ) : (
-            compareSpaces.map((space) => (
-              <article key={space.id} style={styles.compareCard}>
-                <h3>{space.title}</h3>
-                <p>₹{space.pricePerHour}/hr</p>
-                <p>Capacity: {space.capacity}</p>
-                <p>Rating: {space.rating}</p>
-              </article>
-            ))
-          )}
-        </div>
-      </section>
-
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Reviews</h2>
-        <div style={styles.reviewGrid}>
-          {seedReviews.map((review) => (
-            <article key={review.id} style={styles.reviewCard}>
-              <h4>{review.user}</h4>
-              <p style={styles.muted}>{"⭐".repeat(review.rating)}</p>
-              <p>{review.comment}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Standout features</h2>
-        <div style={styles.featureGrid}>
-          <article style={styles.featureCard}><h3>AI price recommendation</h3><p style={styles.muted}>Recommended range: ₹{Math.round((filteredSpaces[0]?.pricePerHour || 900) * 0.9)} - ₹{Math.round((filteredSpaces[0]?.pricePerHour || 900) * 1.1)}/hr</p></article>
-          <article style={styles.featureCard}><h3>Heatmap of nearby spaces</h3><p style={styles.muted}>Density preview enabled for Bengaluru, Mumbai, Delhi, Hyderabad.</p></article>
-          <article style={styles.featureCard}><h3>Space recommendation system</h3><p style={styles.muted}>Top picks for you: {trending.map((item) => item.title).join(", ")}.</p></article>
-          <article style={styles.featureCard}><h3>AI chatbot</h3><p style={styles.muted}>Try: “{chatPrompt}”</p></article>
-        </div>
-      </section>
+      )}
     </div>
   );
 }
 
-function SpaceTile({ space, isWishlisted, inCompare, onWishlist, onCompare }) {
-  return (
-    <article style={styles.card}>
-      <img src={`${space.images[0]}?auto=format&fit=crop&w=1200&q=60`} alt={space.title} style={styles.image} />
-      <div style={styles.cardBody}>
-        <h3>{space.title}</h3>
-        <p style={styles.muted}>{space.location} • {space.type}</p>
-        <p style={styles.muted}>⭐ {space.rating} ({space.reviewsCount})</p>
-        <p style={styles.price}>₹{space.pricePerHour}/hour</p>
-        <div style={styles.cardActions}>
-          <Link to={`/spaces/${space.id}`} style={styles.primaryButton}>View</Link>
-          <Link to={`/booking/${space.id}`} style={styles.secondaryButton}>Book</Link>
-        </div>
-        <div style={styles.cardActions}>
-          <button type="button" style={styles.smallButton} onClick={() => onWishlist(space.id)}>
-            {isWishlisted ? "♥ Wishlisted" : "♡ Wishlist"}
-          </button>
-          <button type="button" style={styles.smallButton} onClick={() => onCompare(space.id)}>
-            {inCompare ? "✓ Comparing" : "⇄ Compare"}
-          </button>
-        </div>
-      </div>
-    </article>
-  );
-}
-
 const styles = {
-  page: { maxWidth: 1200, margin: "0 auto", padding: "24px" },
-  hero: {
-    border: "1px solid rgba(148,163,184,0.25)",
-    borderRadius: 18,
-    padding: 24,
-    background: "linear-gradient(120deg,rgba(37,99,235,0.35),rgba(15,23,42,0.85))"
+  container: {
+    padding: "30px 24px 44px",
+    minHeight: "100vh",
+    maxWidth: "1200px",
+    margin: "0 auto",
   },
-  heroTitle: { fontSize: "clamp(30px,5vw,48px)", marginBottom: 8 },
-  heroText: { color: "#cbd5e1", marginBottom: 16 },
-  searchPanel: { display: "grid", gridTemplateColumns: "2fr 1fr auto", gap: 10 },
-  input: { padding: 12, borderRadius: 10, border: "1px solid rgba(148,163,184,0.45)", background: "#0b122e", color: "#e2e8f0" },
-  primaryButton: { background: "linear-gradient(90deg,#2563eb,#38bdf8)", color: "#fff", padding: "10px 14px", borderRadius: 10, fontWeight: 700, textAlign: "center", border: "none" },
-  secondaryButton: { border: "1px solid rgba(148,163,184,0.45)", color: "#e2e8f0", padding: "10px 14px", borderRadius: 10, textAlign: "center" },
-  categories: { marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8 },
-  chip: { border: "1px solid rgba(148,163,184,0.35)", borderRadius: 999, color: "#cbd5e1", background: "transparent", padding: "7px 12px" },
-  activeChip: { background: "rgba(56,189,248,0.18)", color: "#e0f2fe", borderColor: "rgba(56,189,248,0.5)" },
-  section: { marginTop: 28 },
-  sectionTitle: { marginBottom: 12 },
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 14 },
-  card: { border: "1px solid rgba(148,163,184,0.2)", background: "rgba(15,23,42,0.66)", borderRadius: 14, overflow: "hidden" },
-  image: { width: "100%", height: 170, objectFit: "cover" },
-  cardBody: { padding: 14 },
-  muted: { color: "#94a3b8" },
-  price: { fontWeight: 700, color: "#7dd3fc", margin: "8px 0" },
-  cardActions: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 },
-  smallButton: { border: "1px solid rgba(148,163,184,0.35)", borderRadius: 8, background: "transparent", color: "#cbd5e1", padding: "8px 10px" },
-  compareWrap: { border: "1px dashed rgba(148,163,184,0.35)", borderRadius: 14, padding: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
-  compareCard: { background: "rgba(15,23,42,0.66)", border: "1px solid rgba(148,163,184,0.2)", borderRadius: 10, padding: 12 },
-  reviewGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12 },
-  reviewCard: { border: "1px solid rgba(148,163,184,0.2)", borderRadius: 12, padding: 12, background: "rgba(15,23,42,0.66)" },
-  featureGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 12 },
-  featureCard: { border: "1px solid rgba(148,163,184,0.2)", borderRadius: 12, padding: 12, background: "rgba(15,23,42,0.66)" }
+  header: {
+    marginBottom: "18px",
+  },
+  heading: {
+    color: "#f8fafc",
+    fontSize: "clamp(28px,4vw,42px)",
+    marginBottom: "8px",
+  },
+  tagline: {
+    color: "#94a3b8",
+  },
+  filterBar: {
+    marginTop: "16px",
+    marginBottom: "14px",
+    display: "grid",
+    gridTemplateColumns: "2fr 1fr auto",
+    gap: "10px",
+  },
+  input: {
+    padding: "12px",
+    borderRadius: "10px",
+    border: "1px solid rgba(148,163,184,0.35)",
+    background: "rgba(15,23,42,0.65)",
+    color: "#f8fafc",
+  },
+  clearBtn: {
+    border: "1px solid rgba(148,163,184,0.35)",
+    background: "transparent",
+    color: "#e2e8f0",
+    borderRadius: "10px",
+    padding: "0 14px",
+    fontWeight: 700,
+  },
+  countText: {
+    color: "#cbd5e1",
+    marginBottom: "12px",
+    fontSize: "14px",
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))",
+    gap: "16px",
+    marginTop: "8px",
+  },
+  card: {
+    background: "rgba(15,23,42,0.62)",
+    border: "1px solid rgba(148,163,184,0.2)",
+    borderRadius: "16px",
+    overflow: "hidden",
+    boxShadow: "0 14px 30px rgba(2,6,23,0.28)",
+  },
+  image: {
+    width: "100%",
+    height: "180px",
+    objectFit: "cover",
+  },
+  cardBody: {
+    padding: "14px",
+  },
+  title: {
+    color: "#f8fafc",
+    marginBottom: "6px",
+  },
+  text: {
+    color: "#94a3b8",
+    marginBottom: "8px",
+  },
+  price: {
+    color: "#7dd3fc",
+    marginBottom: "10px",
+  },
+  button: {
+    width: "100%",
+    background: "linear-gradient(90deg,#2563eb,#38bdf8)",
+    color: "white",
+    border: "none",
+    padding: "10px 14px",
+    borderRadius: "10px",
+    fontWeight: 700,
+  },
+  emptyState: {
+    marginTop: "20px",
+    textAlign: "center",
+    border: "1px dashed rgba(148,163,184,0.35)",
+    borderRadius: "14px",
+    padding: "22px",
+    background: "rgba(15,23,42,0.4)",
+  },
+  emptyTitle: {
+    color: "#e2e8f0",
+    marginBottom: "6px",
+  },
+  emptyText: {
+    color: "#94a3b8",
+  },
+  overlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    background: "rgba(2,6,23,0.76)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    animation: "fadeIn 0.25s ease",
+    padding: "20px",
+    zIndex: 2000,
+  },
+  modal: {
+    background: "#0f172a",
+    border: "1px solid rgba(148,163,184,0.28)",
+    padding: "22px",
+    borderRadius: "16px",
+    width: "min(420px, 100%)",
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+    animation: "slideUp 0.25s ease",
+  },
+  modalTitle: {
+    color: "#f8fafc",
+  },
+  modalText: {
+    color: "#94a3b8",
+  },
+  modalPrice: {
+    color: "#7dd3fc",
+  },
+  modalInput: {
+    padding: "10px",
+    borderRadius: "8px",
+    border: "1px solid rgba(148,163,184,0.35)",
+    background: "#0b122e",
+    color: "#f8fafc",
+  },
+  payBtn: {
+    background: "#16a34a",
+    color: "white",
+    border: "none",
+    padding: "11px",
+    borderRadius: "8px",
+    fontWeight: 700,
+    marginTop: "4px",
+  },
+  closeBtn: {
+    background: "#ef4444",
+    color: "white",
+    border: "none",
+    padding: "11px",
+    borderRadius: "8px",
+    fontWeight: 700,
+  },
 };
 
 export default Home;
