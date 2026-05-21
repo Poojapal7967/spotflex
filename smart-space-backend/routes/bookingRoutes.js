@@ -1,6 +1,25 @@
 const express = require("express");
+const rateLimit = require("express-rate-limit");
 const router = express.Router();
 const Booking = require("../models/Booking");
+const bookingRateLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        message: "Too many requests. Please try again later."
+    }
+});
+
+router.use(bookingRateLimiter);
+
+const sanitizeString = (value) => {
+    if (typeof value !== "string") return null;
+    const sanitized = value.trim();
+    if (!sanitized) return null;
+    return sanitized;
+};
 
 const toMinutes = (time) => {
     if (!time || !time.includes(":")) return NaN;
@@ -42,9 +61,13 @@ const validateDateAndTime = (date, startTime, endTime) => {
 };
 
 const hasSlotConflict = async(spaceId, date, startTime, endTime, excludeId) => {
+    const safeSpaceId = sanitizeString(spaceId);
+    const safeDate = sanitizeString(date);
+    if (!safeSpaceId || !safeDate) return true;
+
     const query = {
-        spaceId,
-        date,
+        spaceId: safeSpaceId,
+        date: safeDate,
         status: {
             $ne: "cancelled"
         }
@@ -80,20 +103,28 @@ router.post("/create", async(req, res) => {
             endTime
         } = req.body;
 
-        if (!userId || !userName || !spaceId || !spaceTitle) {
+        const safeUserId = sanitizeString(userId);
+        const safeUserName = sanitizeString(userName);
+        const safeSpaceId = sanitizeString(spaceId);
+        const safeSpaceTitle = sanitizeString(spaceTitle);
+        const safeDate = sanitizeString(date);
+        const safeStartTime = sanitizeString(startTime);
+        const safeEndTime = sanitizeString(endTime);
+
+        if (!safeUserId || !safeUserName || !safeSpaceId || !safeSpaceTitle) {
             return res.status(400).json({
                 message: "Required booking details are missing"
             });
         }
 
-        const dateTimeError = validateDateAndTime(date, startTime, endTime);
+        const dateTimeError = validateDateAndTime(safeDate, safeStartTime, safeEndTime);
         if (dateTimeError) {
             return res.status(400).json({
                 message: dateTimeError
             });
         }
 
-        const conflict = await hasSlotConflict(spaceId, date, startTime, endTime);
+        const conflict = await hasSlotConflict(safeSpaceId, safeDate, safeStartTime, safeEndTime);
         if (conflict) {
             return res.status(400).json({
                 message: "Selected slot is already booked"
@@ -102,6 +133,13 @@ router.post("/create", async(req, res) => {
 
         const booking = new Booking({
             ...req.body,
+            userId: safeUserId,
+            userName: safeUserName,
+            spaceId: safeSpaceId,
+            spaceTitle: safeSpaceTitle,
+            date: safeDate,
+            startTime: safeStartTime,
+            endTime: safeEndTime,
             status: "upcoming"
         });
 
@@ -120,8 +158,15 @@ router.post("/create", async(req, res) => {
 // ================= USER BOOKINGS =================
 router.get("/user/:userId", async(req, res) => {
     try {
+        const safeUserId = sanitizeString(req.params.userId);
+        if (!safeUserId) {
+            return res.status(400).json({
+                message: "Invalid user id"
+            });
+        }
+
         const bookings = await Booking.find({
-            userId: req.params.userId
+            userId: safeUserId
         }).sort({
             bookingDate: -1
         });
@@ -181,6 +226,9 @@ router.put("/:id/reschedule", async(req, res) => {
             startTime,
             endTime
         } = req.body;
+        const safeDate = sanitizeString(date);
+        const safeStartTime = sanitizeString(startTime);
+        const safeEndTime = sanitizeString(endTime);
         const booking = await Booking.findById(req.params.id);
 
         if (!booking) {
@@ -202,23 +250,23 @@ router.put("/:id/reschedule", async(req, res) => {
             });
         }
 
-        const dateTimeError = validateDateAndTime(date, startTime, endTime);
+        const dateTimeError = validateDateAndTime(safeDate, safeStartTime, safeEndTime);
         if (dateTimeError) {
             return res.status(400).json({
                 message: dateTimeError
             });
         }
 
-        const conflict = await hasSlotConflict(booking.spaceId, date, startTime, endTime, booking._id);
+        const conflict = await hasSlotConflict(booking.spaceId, safeDate, safeStartTime, safeEndTime, booking._id);
         if (conflict) {
             return res.status(400).json({
                 message: "Selected slot is already booked"
             });
         }
 
-        booking.date = date;
-        booking.startTime = startTime;
-        booking.endTime = endTime;
+        booking.date = safeDate;
+        booking.startTime = safeStartTime;
+        booking.endTime = safeEndTime;
         booking.status = "upcoming";
         booking.cancelledAt = null;
         await booking.save();
